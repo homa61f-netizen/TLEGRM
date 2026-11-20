@@ -36,7 +36,7 @@ init(autoreset=True)
 class الاعدادات:
     API_ID = 22719912
     API_HASH = "de28bce3ac2f088204182fb17bca8b8e"
-    TOKEN = "8908252305:AAFnTvaJNt4eNCd9-bRNIhqnmyVSEGu9NIk"
+    TOKEN = "8967610616:AAFYTwMV6u1VlnOpMdpRwYMfiK7i112VU5g"
     
     المجلد_الرئيسي = Path(__file__).parent
     مجلد_الجلسات = المجلد_الرئيسي / "الجلسات"
