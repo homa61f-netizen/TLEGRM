@@ -2,9 +2,8 @@
   "version": 2,
   "builds": [
     {
-      "src": "server.js",
-      "use": "@vercel/node",
-      "config": { "maxDuration": 60 }
+      "src": "api/index.py",
+      "use": "@vercel/python"
     },
     {
       "src": "index.html",
@@ -12,7 +11,7 @@
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "server.js" },
+    { "src": "/api/(.*)", "dest": "api/index.py" },
     { "src": "/(.*)", "dest": "index.html" }
   ]
 }
