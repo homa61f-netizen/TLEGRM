@@ -5,44 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>البوت الاحترافي</title>
     <style>
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { background-color: #0f172a; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .card { background-color: #1e293b; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 100%; max-width: 450px; }
-        h1 { text-align: center; color: #38bdf8; margin-bottom: 20px; }
+        .card { background-color: #1e293b; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 100%; max-width: 500px; }
+        h1 { text-align: center; color: #38bdf8; margin-bottom: 20px;}
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 8px; color: #94a3b8; font-size: 14px; }
-        input, select { width: 100%; padding: 12px; background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; color: white; font-size: 16px; outline: none; }
+        input, select { width: 100%; padding: 12px; background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; color: white; font-size: 16px; outline: none;}
         input:focus, select:focus { border-color: #3b82f6; }
-        button { width: 100%; padding: 14px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+        button { width: 100%; padding: 14px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s;}
         button:hover { background-color: #2563eb; }
-        button:disabled { background-color: #475569; cursor: not-allowed; }
+        button:disabled { background-color: #475569; cursor: not-allowed;}
         #status { margin-top: 20px; padding: 15px; border-radius: 8px; text-align: center; display: none; font-weight: bold; }
         .success { background-color: rgba(34,197,94,0.2); color: #22c55e; border: 1px solid #22c55e; display: block !important; }
         .error { background-color: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid #ef4444; display: block !important; }
         .loading { background-color: rgba(59,130,246,0.2); color: #3b82f6; border: 1px solid #3b82f6; display: block !important; }
-        #loginMsg { margin-top: 10px; text-align: center; color: #fbbf24; font-size: 14px; }
+        .info { font-size: 13px; color: #94a3b8; text-align: center; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>🚀 البوت الاحترافي</h1>
+        <h1>🚀 لوحة تحكم البوت</h1>
         
         <!-- شاشة تسجيل الدخول -->
         <div id="loginScreen" style="display: none;">
             <div class="form-group">
                 <label>تسجيل الدخول (يُحفظ للأبد):</label>
-                <input type="text" id="phone" placeholder="رقم الهاتف مع كود الدولة (مثال: 201012345678)">
+                <input type="text" id="phone" placeholder="رقم الهاتف (مثال: 201012345678)">
             </div>
             <button onclick="sendCode()" id="sendBtn">إرسال كود التحقق</button>
             
             <div id="codeStep" style="display: none; margin-top: 15px;">
                 <div class="form-group">
                     <label>كود التحقق:</label>
-                    <input type="text" id="code" placeholder="أدخل الكود هنا">
+                    <input type="text" id="code" placeholder="أدخل الكود">
                 </div>
                 <button onclick="verifyCode()">تأكيد الكود</button>
             </div>
-            <div id="loginMsg"></div>
+            <div id="loginMsg" class="info"></div>
         </div>
 
         <!-- شاشة العمليات -->
@@ -55,7 +55,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label>رابط المجموعة أو القناة:</label>
+                <label>رابط المجموعة أو @username:</label>
                 <input type="text" id="link" placeholder="https://t.me/example">
             </div>
             <div class="form-group">
@@ -64,6 +64,7 @@
             </div>
             <button onclick="process()" id="startBtn">بدء التنفيذ</button>
             <div id="status"></div>
+            <div class="info" id="sessionInfo"></div>
         </div>
     </div>
 
@@ -75,6 +76,7 @@
                 const data = await res.json();
                 if (data.loggedIn) {
                     document.getElementById('appScreen').style.display = 'block';
+                    document.getElementById('sessionInfo').innerText = `✅ متصل بالحساب: ${data.name}`;
                 } else {
                     document.getElementById('loginScreen').style.display = 'block';
                 }
@@ -83,13 +85,10 @@
             }
         };
 
-        // إرسال الكود
         async function sendCode() {
             const phone = document.getElementById('phone').value;
             if (!phone) return alert("أدخل رقم الهاتف");
-            
-            const btn = document.getElementById('sendBtn');
-            btn.disabled = true;
+            document.getElementById('sendBtn').disabled = true;
             document.getElementById('loginMsg').innerText = "⏳ جاري إرسال الكود...";
             
             try {
@@ -99,24 +98,23 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    document.getElementById('loginMsg').innerText = "✅ تم إرسال الكود، تحقق من تليجرام";
+                    document.getElementById('loginMsg').innerText = "✅ تم إرسال الكود";
                     document.getElementById('codeStep').style.display = 'block';
                 } else {
                     document.getElementById('loginMsg').innerText = "❌ " + data.error;
-                    btn.disabled = false;
+                    document.getElementById('sendBtn').disabled = false;
                 }
-            } catch (e) {
-                document.getElementById('loginMsg').innerText = "❌ خطأ في الاتصال";
-                btn.disabled = false;
+            } catch (e) { 
+                document.getElementById('loginMsg').innerText = "❌ خطأ في الاتصال"; 
+                document.getElementById('sendBtn').disabled = false;
             }
         }
 
-        // تأكيد الكود
         async function verifyCode() {
             const code = document.getElementById('code').value;
             if (!code) return alert("أدخل الكود");
-            
             document.getElementById('loginMsg').innerText = "⏳ جاري التحقق...";
+            
             try {
                 const res = await fetch('/api/verify-code', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -129,22 +127,19 @@
                 } else {
                     document.getElementById('loginMsg').innerText = "❌ " + data.error;
                 }
-            } catch (e) {
-                document.getElementById('loginMsg').innerText = "❌ خطأ في الاتصال";
+            } catch (e) { 
+                document.getElementById('loginMsg').innerText = "❌ خطأ في الاتصال"; 
             }
         }
 
-        // تنفيذ العمليات
         async function process() {
             const action = document.getElementById('action').value;
             const link = document.getElementById('link').value;
             const limit = document.getElementById('limit').value;
             const status = document.getElementById('status');
-            const btn = document.getElementById('startBtn');
-            
             if (!link) return alert("أدخل الرابط");
             
-            btn.disabled = true;
+            document.getElementById('startBtn').disabled = true;
             status.className = "loading"; 
             status.innerText = "⏳ جاري المعالجة..."; 
             status.style.display = "block";
@@ -159,9 +154,9 @@
                 status.innerText = data.success ? `✅ ${data.message}` : `❌ ${data.error}`;
             } catch (e) {
                 status.className = "error"; 
-                status.innerText = "❌ خطأ في الاتصال بالسيرفر";
+                status.innerText = "❌ خطأ في الاتصال";
             } finally {
-                btn.disabled = false;
+                document.getElementById('startBtn').disabled = false;
             }
         }
     </script>
