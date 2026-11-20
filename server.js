@@ -8,55 +8,55 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// جلب الإعدادات
 const apiId = parseInt(process.env.API_ID);
 const apiHash = process.env.API_HASH;
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = "telegram_bot";
 
-// الاتصال بقاعدة البيانات
+// ─── إدارة قاعدة البيانات ───
+let dbClient = null;
 async function getDB() {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    return client.db(DB_NAME);
+    if (!dbClient) {
+        dbClient = new MongoClient(MONGODB_URI);
+        await dbClient.connect();
+    }
+    return dbClient.db(DB_NAME);
 }
 
-// جلب الجلسة المحفوظة
-async function getSavedSessionString() {
+// ─── التحقق من الجلسة ───
+app.get('/api/check-session', async (req, res) => {
     try {
         const db = await getDB();
         const doc = await db.collection("tg_session").findOne({ _id: "main" });
-        return doc ? doc.sessionString : null;
-    } catch (e) {
-        return null;
-    }
-}
-
-// 1. التحقق من حالة الجلسة
-app.get('/api/check-session', async (req, res) => {
-    try {
-        const sessionStr = await getSavedSessionString();
-        if (sessionStr) {
-            const client = new TelegramClient(new StringSession(sessionStr), apiId, apiHash, { connectionRetries: 1 });
-            await client.connect();
-            const authorized = await client.isUserAuthorized();
-            await client.disconnect();
-            return res.json({ loggedIn: authorized });
+        
+        if (!doc || !doc.sessionString) {
+            return res.json({ loggedIn: false });
         }
-        res.json({ loggedIn: false });
+
+        // اختبار سريع للجلسة
+        const client = new TelegramClient(new StringSession(doc.sessionString), apiId, apiHash, { connectionRetries: 1 });
+        await client.connect();
+        const authorized = await client.isUserAuthorized();
+        await client.disconnect();
+        
+        res.json({ loggedIn: authorized });
     } catch (error) {
         res.json({ loggedIn: false });
     }
 });
 
-// 2. إرسال كود التحقق (نحفظ الجلسة المؤقتة في MongoDB)
+// ─── إرسال كود التحقق ───
 app.post('/api/send-code', async (req, res) => {
     const { phone } = req.body;
     try {
         const client = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 3 });
         await client.connect();
+        
+        // إرسال الكود
         const result = await client.sendCode({ apiId, apiHash }, phone);
         
-        // حفظ بيانات الجلسة المؤقتة في قاعدة البيانات بدلاً من الذاكرة
+        // حفظ بيانات الجلسة المؤقتة في قاعدة البيانات
         const db = await getDB();
         await db.collection("temp_login").updateOne(
             { _id: "temp" },
@@ -69,13 +69,13 @@ app.post('/api/send-code', async (req, res) => {
         );
 
         await client.disconnect();
-        res.json({ success: true });
+        res.json({ success: true, message: "تم إرسال الكود بنجاح، تحقق من تليجرام" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// 3. تأكيد الكود (نقرأ الجلسة من MongoDB)
+// ─── تأكيد الكود ───
 app.post('/api/verify-code', async (req, res) => {
     const { code } = req.body;
     try {
@@ -95,7 +95,7 @@ app.post('/api/verify-code', async (req, res) => {
 
         const sessionString = client.session.save();
         
-        // حفظ الجلسة النهائية الدائمة
+        // حفظ الجلسة النهائية
         await db.collection("tg_session").updateOne(
             { _id: "main" },
             { $set: { sessionString: sessionString, phone: tempData.phone, updatedAt: new Date() } },
@@ -114,16 +114,17 @@ app.post('/api/verify-code', async (req, res) => {
     }
 });
 
-// دالة مساعدة للعمليات
+// ─── العمليات (استخراج وإضافة) ───
 async function getClient() {
-    const sessionString = await getSavedSessionString();
-    if (!sessionString) throw new Error("يرجى تسجيل الدخول أولاً");
-    const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, { connectionRetries: 3 });
+    const db = await getDB();
+    const doc = await db.collection("tg_session").findOne({ _id: "main" });
+    if (!doc || !doc.sessionString) throw new Error("يرجى تسجيل الدخول أولاً");
+    
+    const client = new TelegramClient(new StringSession(doc.sessionString), apiId, apiHash, { connectionRetries: 3 });
     await client.connect();
     return client;
 }
 
-// 4. مسار الاستخراج
 app.post('/api/extract', async (req, res) => {
     const { link, limit } = req.body;
     try {
@@ -145,23 +146,16 @@ app.post('/api/extract', async (req, res) => {
     }
 });
 
-// 5. مسار الإضافة
 app.post('/api/add', async (req, res) => {
-    const { link, limit } = req.body;
     try {
         const client = await getClient();
-        let entity;
-        try { entity = await client.getEntity(link); } 
-        catch (e) { throw new Error("لا يمكن الوصول للمجموعة"); }
-
         await client.disconnect();
-        res.json({ success: true, message: `تم الدخول للمجموعة: ${entity.title || entity.username} (العملية قيد التطوير)` });
+        res.json({ success: true, message: "تم الاتصال بالجلسة بنجاح (العملية قيد التطوير)" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
 module.exports = app;
