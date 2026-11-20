@@ -8,7 +8,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// جلب الإعدادات من Vercel
 const apiId = parseInt(process.env.API_ID);
 const apiHash = process.env.API_HASH;
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -49,7 +48,7 @@ app.get('/api/check-session', async (req, res) => {
     }
 });
 
-// 2. إرسال كود التحقق
+// 2. إرسال كود التحقق (نحفظ الجلسة المؤقتة في MongoDB)
 app.post('/api/send-code', async (req, res) => {
     const { phone } = req.body;
     try {
@@ -57,38 +56,54 @@ app.post('/api/send-code', async (req, res) => {
         await client.connect();
         const result = await client.sendCode({ apiId, apiHash }, phone);
         
-        global.tempClient = client;
-        global.tempPhone = phone;
-        global.tempHash = result.phoneCodeHash;
+        // حفظ بيانات الجلسة المؤقتة في قاعدة البيانات بدلاً من الذاكرة
+        const db = await getDB();
+        await db.collection("temp_login").updateOne(
+            { _id: "temp" },
+            { $set: { 
+                phone: phone, 
+                phoneCodeHash: result.phoneCodeHash,
+                sessionString: client.session.save() 
+            }},
+            { upsert: true }
+        );
 
+        await client.disconnect();
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// 3. تأكيد الكود وحفظ الجلسة
+// 3. تأكيد الكود (نقرأ الجلسة من MongoDB)
 app.post('/api/verify-code', async (req, res) => {
     const { code } = req.body;
-    if (!global.tempClient) return res.status(400).json({ success: false, error: "انتهت الجلسة المؤقتة، أعد المحاولة" });
-
     try {
-        const { tempClient, tempPhone, tempHash } = global;
-        await tempClient.invoke(new Api.auth.SignIn({
-            phoneNumber: tempPhone, phoneCodeHash: tempHash, phoneCode: code
+        const db = await getDB();
+        const tempData = await db.collection("temp_login").findOne({ _id: "temp" });
+        
+        if (!tempData) return res.status(400).json({ success: false, error: "انتهت الجلسة المؤقتة، أعد إرسال الكود" });
+
+        const client = new TelegramClient(new StringSession(tempData.sessionString), apiId, apiHash, { connectionRetries: 3 });
+        await client.connect();
+        
+        await client.invoke(new Api.auth.SignIn({
+            phoneNumber: tempData.phone, 
+            phoneCodeHash: tempData.phoneCodeHash, 
+            phoneCode: code
         }));
 
-        const sessionString = tempClient.session.save();
+        const sessionString = client.session.save();
         
-        const db = await getDB();
+        // حفظ الجلسة النهائية الدائمة
         await db.collection("tg_session").updateOne(
             { _id: "main" },
-            { $set: { sessionString: sessionString, phone: tempPhone, updatedAt: new Date() } },
+            { $set: { sessionString: sessionString, phone: tempData.phone, updatedAt: new Date() } },
             { upsert: true }
         );
 
-        await tempClient.disconnect();
-        global.tempClient = null;
+        await db.collection("temp_login").deleteOne({ _id: "temp" });
+        await client.disconnect();
 
         res.json({ success: true });
     } catch (error) {
@@ -139,7 +154,6 @@ app.post('/api/add', async (req, res) => {
         try { entity = await client.getEntity(link); } 
         catch (e) { throw new Error("لا يمكن الوصول للمجموعة"); }
 
-        // كود الإضافة هنا (يحتاج قائمة أعضاء)
         await client.disconnect();
         res.json({ success: true, message: `تم الدخول للمجموعة: ${entity.title || entity.username} (العملية قيد التطوير)` });
     } catch (error) {
